@@ -1,0 +1,46 @@
+# YOLO detection
+try:
+    det_results = yolo_model(
+        frame,
+        conf    = CONFIDENCE,
+        classes = CLASSES,
+        verbose = False
+    )[0]
+    dets = det_results.boxes.data.cpu().numpy()
+except Exception as e:
+    dets = np.empty((0, 6))
+
+# DeepOcSort tracking
+try:
+    if len(dets) > 0:
+        tracks = tracker.update(dets, frame)
+    else:
+        tracks = tracker.update(np.empty((0, 6)), frame)
+except Exception as e:
+    tracks = []
+
+# Build ship list and Predict
+for t in (tracks if tracks is not None and len(tracks) > 0 else []):
+    try:
+        x1, y1, x2, y2 = int(t[0]), int(t[1]), int(t[2]), int(t[3])
+        sid            = int(t[4])
+
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+        history[sid].append((cx, cy))
+
+        smoothed = smooth_history(history[sid])
+
+        # LSTM / kinematic prediction
+        if buffer_complete and frame_count % update_frame_interval == 0:
+            if lstm_engine:
+                lstm_engine.update(str(sid), cx, cy)
+                pred, method = lstm_engine.predict(str(sid))
+                persistent_predictions[sid] = pred
+            else:
+                persistent_predictions[sid] = predict_kinematic(smoothed)
+
+        predicted_path = persistent_predictions.get(sid, [])
+
+    except Exception as e:
+        continue
