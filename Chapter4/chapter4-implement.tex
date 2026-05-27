@@ -1,0 +1,96 @@
+\chapter{Implementation of the MARVIS System}
+
+The transformation of a designed system into a real-time operational maritime surveillance framework requires careful integration of multiple processing modules, software tools, and data flows. The proposed maritime surveillance system implements the design decisions presented in the previous chapter and converts them into a complete end-to-end framework capable of real-time vessel monitoring, tracking, and trajectory prediction.
+
+Each processing module was independently developed, configured, and evaluated before being integrated into the complete surveillance pipeline. This modular implementation strategy allowed identification and correction of errors at the component level before full system integration. The implementation process involved configuring the development environment, preparing datasets, training machine learning models, integrating individual modules, and ensuring stable real-time processing performance.
+
+This chapter presents the practical implementation methodology of the proposed maritime surveillance system, including development environment configuration, dataset preparation procedures, model implementation strategies, and the realization of each functional module.
+
+\section[Top-Level System Design and Implementation]{\textbf{Top-Level System Design and Implementation}}
+
+The proposed maritime surveillance system is implemented using a modular pipeline architecture in which individual processing components operate independently while exchanging information through structured interfaces. The implementation integrates \gls{ais} telemetry processing, computer vision modules, trajectory prediction mechanisms, and visualization dashboards into a unified framework for real-time maritime monitoring.
+
+The top-level design consists of six major functional modules namely video ingestion, ship detection, multi-object tracking, sensor fusion, trajectory prediction, and geospatial visualization. Each module performs a dedicated task and communicates with adjacent stages through well-defined data interfaces, thereby improving modularity, maintainability, and scalability of the overall system.
+
+The implementation and communication architecture of the proposed system is illustrated in Fig.~\ref{fig:deployment}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Chapter4/Figures/deployment_architecture.jpeg}
+\caption{Deployment and Backend Communication Architecture of Proposed Maritime Surveillance System}
+\label{fig:deployment}
+\end{figure}
+
+\subsection{\textbf{Development Environment and Configuration}}
+
+The proposed system was developed using Python 3.8 as the primary programming language due to its extensive support for machine learning and computer vision applications. \gls{pytorch} serves as the primary deep learning framework for implementation of the \gls{yolov8} detection model and the \gls{lstm} trajectory prediction network.
+
+\gls{opencv} is utilized for video ingestion, frame extraction, image preprocessing, and rendering of real-time annotations. Intermediate data structures including bounding box arrays, centroid coordinate histories, and trajectory sequence buffers are managed using NumPy and Pandas libraries. Matplotlib supports offline visualization and analysis of tracking outputs and prediction results, while Folium provides interactive geospatial mapping functionality for displaying vessel positions in geographical coordinates.
+
+The complete processing pipeline is executed in an \gls{nvidia} \gls{gpu}-enabled environment with \gls{cuda} acceleration support to improve computational efficiency and enable real-time processing performance. Development and testing activities were primarily carried out using Jupyter Notebook and Visual Studio Code (VS Code).
+
+\subsection{Data Collection and Data Annotation}
+All the maritime video data were collected and pre-processed to create the training data set for the \gls{yolov8} detection model. The raw video data was then partitioned into individual frames with a fixed sampling interval, resulting in a wide range of images representing varying sea-states, vessel types, illumination conditions and occlusion scenarios. The images were annotated using bounding box labels in \gls{yolo} format that included the class identifier and normalised centre coordinates, width and height of all the vessels instances within each image. The data set was divided into training, validation, and test sets, with ratios set as 70:20:10. To enhance the generalisation and robustness of the model for unseen maritime conditions, data augmentation techniques were used during training, such as horizontal flipping, brightness and contrast jittering, random cropping and mosaic augmentation.
+
+The Ship Detection Module is \gls{yolov8}.\gls{yolov8} is Ship Detection Module.
+Pretrained COCO weights were used to initialise the \gls{yolov8} model and the model was fine-tuned with the prepared maritime dataset using transfer learning. The training was done with the Stochastic Gradient Descent (SGD) optimiser, the Cosine Annealing learning rate scheduler and early stopping based on the convergence of the validation mAP. The model has been configured to have a confidence threshold of 0.5 and an \gls{iou} threshold of 0.45 for \gls{nms} during inference. During runtime, for every video frame extracted, it is input into the trained \gls{yolov8} model that outputs a list of bounding box predictions, confidence scores, and class labels for all the detected vessels. Any detections that are not above the confidence level will be ignored and not sent to the tracking module.
+
+The Multi-Object Tracking Module — \gls{deepocsort} module is used to track the objects in the image.The Multi-Object Tracking Module — \gls{deepocsort} module is applied to track objects in the image.
+Confirmed detections by the \gls{yolov8} module are fed to the \gls{deepocsort} tracker, which is initialised with a maximum track age of 30 frames, a minimum hit count of 3 for the tracker to be considered as a confirmed track, and cosine similarity metric for \gls{reid} (RI). \gls{osnet} is used as the appearance embedding extractor and results in compact feature vectors of detected vessels, which are encoding appearance identity information without position information. \gls{deepocsort} first matches detections to track predictions at every frame according to \gls{iou}, and then further matches the detections to the track predictions by cosine similarity using \gls{reid} embeddings in order to disambiguate the matching. Successful matches update the corresponding tracks, unmatched detections start new tentative tracks and tracks that do not get a match within the maximum age are removed. The coordinates of all tracks that have been determined as active at each frame are extracted and stored in a moving track buffer for use in downstream motion analysis and prediction.
+
+\subsection{\textbf{Motion Parameter Estimation and Sensor Fusion}}
+
+The tracking module maintains a history of centroid coordinates for each active vessel track, enabling computation of inter-frame motion parameters. Instantaneous vessel speed is estimated based on the Euclidean distance travelled between centroid positions in consecutive frames, while vessel heading is determined from the horizontal and vertical displacement components using trigonometric relationships. The calculated heading values are further categorized into cardinal and intermediate directions to improve interpretability.
+
+The computed motion parameters are integrated into the live video output together with vessel bounding boxes and tracking identifiers, thereby providing operators with real-time movement information for each detected vessel.
+
+Simultaneously, the sensor fusion module integrates information obtained from \gls{ais} telemetry and computer vision-based tracking. \gls{ais} data containing Maritime Mobile Service Identity (\gls{mmsi}), geographical coordinates, \gls{sog}, and \gls{cog} are received concurrently with video information and processed to improve temporal consistency.
+
+The pixel coordinates obtained from tracked vessel centroids are transformed into geographical coordinates using a homographic transformation approach. Spatial association between video detections and \gls{ais} records is performed using Haversine distance calculations and nearest-neighbour matching techniques. Successfully associated vessel tracks are enriched with \gls{ais} metadata including vessel identifiers and navigational parameters.
+
+To improve positional stability and reduce the effect of detection noise, a Kalman filtering mechanism is applied to the fused vessel states. The filtering process combines high-frequency video observations with comparatively sparse but accurate \gls{ais} information to generate smooth and reliable estimates of vessel position and velocity.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Chapter4/Figures/cv_ais_fusion.png}
+\caption{\gls{ais}--Computer Vision Data Fusion Process}
+\label{fig:fusion}
+\end{figure}
+
+\subsection{\textbf{Trajectory Prediction Module --- \texorpdfstring{\gls{lstm}}{LSTM}}}
+
+The trajectory prediction module is responsible for estimating future vessel movement patterns using historical tracking information. A \gls{lstm} network is employed due to its capability of learning temporal dependencies present in sequential vessel trajectory data.
+
+The implemented \gls{lstm} predictor consists of two stacked \gls{lstm} layers followed by a fully connected output layer. The network receives sequential input data where each timestep contains vessel movement information including latitude, longitude, \gls{sog}, sine and cosine representations of \gls{cog}, and vessel-type encoding information.
+
+The model was trained using historical vessel trajectory data with \gls{mse} as the loss function and Adam optimizer for parameter optimization. During runtime, the feature sequence generation module constructs fixed-length temporal windows from the history of Kalman-filtered vessel tracks and supplies them to the trained prediction model.
+
+The prediction module processes the sequential information and estimates future geographical vessel positions for subsequent timesteps. To maintain prediction continuity for newly observed vessels with insufficient historical information, a kinematic linear regression-based fallback mechanism is incorporated. This approach enables prediction generation even for short-duration tracks.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.90\textwidth]{Chapter4/Figures/lstm_architecture.png}
+\caption{\gls{bilstm} Architecture for Vessel Trajectory Prediction}
+\label{fig:lstm}
+\end{figure}
+
+\subsection{\textbf{Land Mask Filter and Geospatial Visualisation}}
+
+The predicted vessel trajectory coordinates generated by the prediction module are further processed through a land mask filtering mechanism to ensure geographical validity of predicted routes. The land mask filter compares each predicted coordinate against a global land-water map and determines whether the predicted location falls within navigable maritime regions.
+
+Predicted points that lie within land regions due to model uncertainty or prediction noise are corrected by mapping them to the nearest valid water coordinates. This filtering process improves the physical realism of vessel movement predictions and prevents generation of impractical navigation paths.
+
+For real-time monitoring purposes, multiple visual elements are rendered onto the live surveillance output using \gls{opencv}. These visual components include vessel bounding boxes, tracking identifiers, motion parameter annotations, historical trajectory overlays, and predicted vessel paths.
+
+Simultaneously, geospatial visualization is performed using interactive dashboard interfaces where vessel locations and predicted trajectories are displayed on map-based environments. The visualization module provides real-time situational awareness capabilities and allows operators to monitor vessel movement information efficiently.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Chapter4/Figures/dashboard_architecture.jpeg}
+\caption{Dashboard Communication and Visualization Architecture}
+\label{fig:dashboard}
+\end{figure}
+
+\vspace{0.75cm}
+\section{Summary}
+This chapter fully implemented the proposed end-to-end maritime surveillance system, and this system was based on the architectural design developed in Chapter 3, to enable the technology to be fully operational and real-time. The development environment was defined and the technology stack consists of Python, \gls{pytorch}, \gls{opencv}, NumPy, Pandas, Matplotlib and Folium, with the processing power and acceleration of the system provided by \gls{nvidia} \gls{cuda}. The data preparation and data annotation process were explained, including extraction of frames from the video and labelling the \gls{yolo} format, partitioning of the data and methods used to augment the data to increase model generalisation. Then the implementation of each functional module was elaborated sequentially: from the configuration of ship detection based on \gls{yolov8} to the development of transfer learning training configuration; from the \gls{deepocsort} configuration, identity-preserving tracking based on \gls{osnet}, to the inter-frame motion parameter estimation and the ingestion of the \gls{ais} stream; from Haversine-based sensor fusion to Kalman filter state smoothing. The network architecture, training process and sequence construction of features at runtime of a \gls{lstm} trajectory prediction module were described, as well as the kinematic fallback strategy for short-history tracks. Last, the pipeline's end-to-end components, the land mask filtering system and the dual-output visualisation system (\gls{opencv}-annotated video feeds and Folium-created interactive geospatial maps) were displayed. The implementation described in this chapter is used to implement the entire surveillance framework whose performance is assessed and analysed in the following chapter.

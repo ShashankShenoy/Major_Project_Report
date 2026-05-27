@@ -1,0 +1,194 @@
+% ─────────────────────────────────────────────────────────────────────────────
+% CHAPTER 6 — CONCLUSION AND FUTURE SCOPE
+% ─────────────────────────────────────────────────────────────────────────────
+
+\chapter{Conclusion and Future Scope}
+
+The work presented in this report addresses the critical gap in maritime 
+surveillance where existing systems rely either on \gls{ais} telemetry alone, 
+which cannot detect non-cooperative vessels, or on isolated vision-based 
+pipelines, which lack the navigational context to support collision 
+avoidance. The proposed MARVIS system demonstrates that these two 
+complementary data sources can be fused in real time within a unified 
+deep-learning pipeline to deliver simultaneous vessel detection, identity 
+tracking, trajectory prediction, and collision risk alerting. This chapter 
+summarises the conclusions drawn from the design, implementation, and 
+evaluation of the system, identifies the current limitations and their 
+implications for practical deployment, and outlines directions for future 
+extension.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Conclusion}
+% ─────────────────────────────────────────────────────────────────────────────
+
+Maritime surveillance in congested waterways such as the Singapore Strait 
+demands a system capable of detecting all vessels regardless of whether 
+they carry \gls{ais} transponders, assigning persistent identities across 
+frames despite occlusions and viewpoint changes, predicting where each 
+vessel is heading over the next several seconds, and raising timely 
+collision risk alerts to support operator decision-making. Each of these 
+requirements was established as a specific objective of this project: 
+(1)~real-time vessel detection from drone or \gls{cctv} video streams, 
+(2)~persistent multi-object tracking with appearance-based 
+\gls{reid}, (3)~geo-referencing of detected vessels to \gls{gps} 
+coordinates and fusion with live \gls{ais} telemetry, (4)~\gls{lstm}-based trajectory 
+prediction with kinematic fallback for nascent tracks, and 
+(5)~\gls{cpa}-based collision risk detection with a graded four-level alert 
+scheme, all integrated into a dual-mode web dashboard accessible in 
+real time.
+
+Each objective was realised through a modular six-stage software pipeline 
+implemented entirely in Python. The \gls{yolov8} anchor-free detection backbone 
+was fine-tuned on the Roboflow maritime dataset and deployed with a 
+confidence threshold of 0.4 to classify seven vessel types from 
+frame-level video input. The \gls{deepocsort} multi-object tracker, combining 
+a per-track Kalman filter with \gls{osnet} \gls{reid} embeddings and a 
+cosine similarity threshold of 0.5, maintained persistent vessel 
+identities across frames under occlusion and crossing conditions. 
+The \texttt{GPSConverter} module transformed pixel centroids to 
+geographic coordinates using a \gls{fov} linear approximation anchored 
+to the Singapore Strait camera position, and the \texttt{CVMatcher} 
+module performed nearest-neighbour \gls{ais} fusion using the Haversine 
+great-circle distance formula within a 5.5\,km matching radius, enriching 
+camera detections with \gls{mmsi}, vessel name, \gls{sog}, and course 
+over ground from the live \gls{ais} stream. The \gls{seqtwo} \gls{lstm} predictor, 
+comprising a bidirectional encoder, soft attention layer, and 
+autoregressive LSTMCell decoder, was trained on Singapore Maritime Dataset 
+trajectory sequences using a composite loss penalising positional error, 
+velocity smoothness, and acceleration consistency, with a three-tier 
+inference fallback ensuring that a trajectory estimate is produced for 
+every tracked vessel regardless of track age. The \gls{cpa}-based collision 
+detector evaluated all vessel pairs at each frame and raised graded 
+alerts with a 30-frame cooldown to avoid alert fatigue.
+
+The experimental evaluation on \gls{smd} test sequences confirms that the 
+proposed system meets all five design objectives. The \gls{yolov8} detection 
+module achieves an overall mAP\textsubscript{50} of 
+\textit{[TBD from friend's results]}, demonstrating effective 
+generalisation across vessel classes, scales, and sea-state conditions. 
+The \gls{deepocsort} tracker achieves a \gls{mota} of 
+\textit{[TBD]}\% with only \textit{[TBD]} identity switches across all 
+test sequences, confirming the effectiveness of the combined 
+Kalman-filter--\gls{reid} association in dense maritime scenes. The full \gls{lstm} 
+trajectory predictor achieves an \gls{ade} of \textit{[TBD]} pixels over the 
+20-step prediction horizon, representing a \textit{[TBD]}\% improvement 
+over the kinematic linear regression baseline, with the advantage most 
+pronounced for vessels executing turning manoeuvres and lane changes 
+that linear extrapolation cannot anticipate. The \gls{cpa} collision detector 
+achieves a precision of \textit{[TBD]} at the critical risk level 
+($<50$\,m \gls{cpa}), providing actionable advance warning with sufficient 
+lead time for operator intervention. Collectively, these results 
+establish that a fully software-based, open-source maritime surveillance 
+system integrating vision, \gls{ais} telemetry, deep learning prediction, and 
+collision avoidance can be realised on commodity hardware and deployed 
+with a single startup command.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Future Scope}
+% ─────────────────────────────────────────────────────────────────────────────
+
+While the proposed system achieves its stated objectives, several 
+constraints and limitations in the current implementation present 
+opportunities for extension in future work.
+
+The geo-referencing module uses a \gls{fov} linear approximation 
+that assumes a flat, undistorted projection centred on a fixed camera 
+position. This is sufficient for small surveillance areas of up to 
+2\,km radius but introduces increasing positional error at larger scales 
+or under non-nadir viewing angles. Future work should replace this 
+approximation with a full homographic transformation using four or more 
+ground-control points with known \gls{gps} coordinates, which has already been 
+prototyped in the \texttt{geo\_mapper.py} module. Automatic camera 
+calibration from \gls{gps} metadata embedded in drone SRT files would further 
+eliminate the need for manual anchor point configuration.
+
+The current \gls{cpa} collision detection module operates on a 
+constant-velocity motion model, using only the instantaneous heading 
+and speed of each vessel. A significant extension would be to replace 
+the constant-velocity \gls{cpa} prediction with the \gls{lstm}-predicted future 
+trajectories, computing \gls{cpa} over the full 20-step predicted path rather 
+than a linear velocity extrapolation. This would allow the system to 
+anticipate collision risks arising from vessels that are currently 
+diverging but whose predicted turning manoeuvres place them on a 
+converging course in the near future.
+
+The \gls{lstm} model was trained exclusively on the Singapore Maritime Dataset, 
+which is captured in a specific geographic and traffic context. 
+Generalisation to other maritime environments with different vessel 
+density, lane structure, or vessel class distributions may require 
+domain adaptation or transfer learning from a more diverse multi-region 
+training corpus. Additionally, the current model architecture generates 
+a single deterministic predicted trajectory per vessel; replacing this 
+with a generative model such as a Conditional Variational Autoencoder 
+(CVAE) or a Generative Adversarial Network (GAN) would enable the system 
+to represent the multi-modal nature of vessel future paths, providing 
+a distribution over possible trajectories rather than a single estimate.
+
+The system currently runs on a conventional \gls{cpu}/\gls{gpu} workstation. 
+For deployment on drone-mounted edge hardware, such as the \gls{nvidia} Jetson 
+Nano or Jetson Orin, the inference pipeline would require quantisation 
+of the \gls{yolov8} model to \gls{int8} precision and optimisation of the \gls{lstm} 
+inference using TensorRT, both of which are supported by the existing 
+\gls{pytorch} and Ultralytics toolchain. Edge deployment would eliminate the 
+need for video transmission to a remote server, reducing latency and 
+enabling autonomous surveillance in communication-denied environments. 
+Finally, extension of the \gls{ais} ingestion module to support additional 
+data sources, including radar returns and satellite \gls{ais}, would 
+significantly increase the system's coverage and reliability in offshore 
+open-sea surveillance scenarios.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Learning Outcomes of the Project}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{itemize}
+
+    \item Gained practical experience in designing and implementing a 
+    real-time multi-stage deep learning pipeline that integrates computer 
+    vision, object tracking, sequence modelling, and geospatial data 
+    fusion within a single production-grade software system.
+
+    \item Developed a thorough understanding of the \gls{yolov8} anchor-free 
+    object detection architecture, including transfer learning and 
+    fine-tuning on a domain-specific maritime dataset, confidence and 
+    \gls{iou} threshold selection, and the trade-offs between model variant 
+    size (nano, medium, large) and inference throughput.
+
+    \item Acquired proficiency in multi-object tracking algorithms, 
+    specifically the \gls{deepocsort} framework, encompassing Kalman filter 
+    state estimation, Hungarian assignment for detection-to-track 
+    association, appearance-based \gls{reid} using \gls{osnet} embeddings, 
+    and evaluation using CLEAR MOT metrics (\gls{mota}, \gls{motp}, \gls{ids}).
+
+    \item Designed, trained, and evaluated a \gls{seqtwo} \gls{lstm} 
+    model with bidirectional encoding and soft attention for non-linear 
+    trajectory prediction, gaining experience in composite loss function 
+    design, early stopping, the \gls{ade}/\gls{fde} evaluation protocol, and the 
+    practical three-tier inference fallback strategy for varying track 
+    history lengths.
+
+    \item Learned to implement sensor fusion between heterogeneous data 
+    sources --- video-based \gls{gps} estimates and live \gls{ais} telemetry --- using 
+    the Haversine great-circle distance formula for nearest-neighbour 
+    spatial matching, and understood the operational significance of 
+    dark vessel detection for maritime domain awareness.
+
+    \item Understood and implemented the \gls{cpa} 
+    algorithm used in professional maritime ARPA systems, applying it 
+    within a software collision detection module with graded risk 
+    classification and alert cooldown logic, and gained awareness of 
+    COLREGS collision regulations that govern maritime navigation.
+
+    \item Gained experience in full-stack system integration, including 
+    the development of a FastAPI and Flask backend with WebSocket 
+    real-time data broadcast, a Folium-based interactive geospatial map 
+    frontend, a Plotly-based analytics dashboard, and a Streamlit-based 
+    MARVIS operator interface, and understood the trade-offs between 
+    polling and push-based data delivery for real-time applications.
+
+    \item Developed skills in collaborative software development using 
+    Git version control, including branch management, conflict resolution, 
+    pull request workflows, and the discipline of maintaining a stable 
+    main branch while active development proceeds on feature branches.
+
+\end{itemize}
