@@ -298,7 +298,7 @@
 	{\Large\bfseries RV College of Engineering$^{\small{\textregistered}}$\unskip\strut\par}
 	{\normalsize\bfseries Mysore Road, RV Vidyaniketan Post, Bengaluru - 560059, Karnataka, India\unskip\strut\par}
 	\vspace{0.25cm}
-	{\Large\bfseries\@title\unskip\strut\par \global\titlelines=\the\prevgraf}% To count the number of lines used in the title - to adjust the spacing of title page
+	{\Large\bfseries\@title\unskip\strut\par \global\titlelines=\prevgraf}% To count the number of lines used in the title - to adjust the spacing of title page
 	\setcounter{numtitlelines}{\the\titlelines}
 	\vspace{0.25cm}
 	{\large\bfseries MAJOR PROJECT REPORT\unskip\strut\par}
@@ -375,6 +375,7 @@
   	\end{center}
 % Force a page break within the titlepage environment
 \clearpage
+\thispagestyle{empty}
 \fi% Major
 \fi% Draft
 % ==========================================
@@ -409,7 +410,7 @@
 {\includegraphics[width=1\textwidth]{Figures/RV_newLogo}\par}
 \vspace{1cm}
 %\ifINT{\Large\itshape Summer Internship Report\par on\par}\fi %Intern
-{\huge\bfseries\@title\unskip\strut\par \global\titlelines=\the\prevgraf}% To count the number of lines used in the title - to adjust the spacing of title page
+{\huge\bfseries\@title\unskip\strut\par \global\titlelines=\prevgraf}% To count the number of lines used in the title - to adjust the spacing of title page
 \setcounter{numtitlelines}{\the\titlelines}
 \ifIDP\vspace{1cm}\else\ifGuideNameCUsed\vspace{0.5cm}\fi\fi
 {\Large\itshape \ifINT \vspace{0.5cm} An Internship \else\ifMinor A Minor Project \else \ifDTL A Design Thinking Lab \else \ifIDP An Interdisciplinary Project \else A Major Project \fi\fi\fi\fi  Report\;(\@subCode)\unskip\strut\par}
@@ -541,8 +542,8 @@
   }\fi%\ifIDP
 \fi%\ifDTL
 \fi%\ifINT
-\par.
-\ifINT\vspace{3cm}\else\ifIDP\vspace{1cm}\else\ifGuideNameCUsed\vspace{0.125cm}\else\vspace{3cm}\fi\fi\fi
+\par
+\ifINT\vspace{3cm}\else\ifIDP\vspace{1cm}\else\ifGuideNameCUsed\vspace{0.125cm}\else\vfill\fi\fi\fi
 \begin{center}% May be try use \vbox cmd for equal spacing, but I need to know the better location (lower)
 {\large\bfseries In partial fulfillment of the requirements for the degree of \par}
 \vspace{0.25cm}
@@ -1055,7 +1056,7 @@
   				\titleafter@pnr%
   				\par\nobreak%
   				\if@twoside
-  					\vspace*{0.325\paperheight}% ADDED in Ver 3.9
+  					\vspace*{\fill}
   				\else
   				
   				\fi
